@@ -236,7 +236,7 @@ cdef class Packer(object):
                 ret = msgpack_pack_map(&self.pk, L)
                 if ret == 0:
                     if self.sort_keys:
-                        for k, v in sorted(d.iteritems(), key=itemgetter(1)):
+                        for k, v in sorted(d.iteritems(), key=itemgetter(0)):
                             ret = self._pack(k, nest_limit-1)
                             if ret != 0: break
                             ret = self._pack(v, nest_limit-1)
