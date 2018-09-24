@@ -1,3 +1,6 @@
+This is a fork of the original msgpack-python project, adding support for
+`sort_keys` serialization option.
+
 ======================
 MessagePack for Python
 ======================
