@@ -1,6 +1,8 @@
 # coding: utf-8
 #cython: embedsignature=True, c_string_encoding=ascii
 
+from operator import itemgetter
+
 from cpython cimport *
 from cpython.version cimport PY_MAJOR_VERSION
 from cpython.exc cimport PyErr_WarnEx
@@ -95,6 +97,9 @@ cdef class Packer(object):
 
     :param str encoding:
         (deprecated) Convert unicode to bytes with this encoding. (default: 'utf-8')
+
+    :param bool sort_keys:
+        Iterate dictionaries in lexicographical order. (default: False)
     """
     cdef msgpack_packer pk
     cdef object _default
@@ -105,6 +110,7 @@ cdef class Packer(object):
     cdef bint strict_types
     cdef bool use_float
     cdef bint autoreset
+    cdef bool sort_keys
 
     def __cinit__(self):
         cdef int buf_size = 1024*1024
@@ -116,13 +122,14 @@ cdef class Packer(object):
 
     def __init__(self, default=None, encoding=None, unicode_errors=None,
                  bint use_single_float=False, bint autoreset=True, bint use_bin_type=False,
-                 bint strict_types=False):
+                 bint strict_types=False, bint sort_keys=False):
         if encoding is not None:
             PyErr_WarnEx(PendingDeprecationWarning, "encoding is deprecated.", 1)
         self.use_float = use_single_float
         self.strict_types = strict_types
         self.autoreset = autoreset
         self.pk.use_bin_type = use_bin_type
+        self.sort_keys = sort_keys
         if default is not None:
             if not PyCallable_Check(default):
                 raise TypeError("default must be a callable.")
@@ -228,22 +235,36 @@ cdef class Packer(object):
                     raise PackValueError("dict is too large")
                 ret = msgpack_pack_map(&self.pk, L)
                 if ret == 0:
-                    for k, v in d.iteritems():
-                        ret = self._pack(k, nest_limit-1)
-                        if ret != 0: break
-                        ret = self._pack(v, nest_limit-1)
-                        if ret != 0: break
+                    if self.sort_keys:
+                        for k, v in sorted(d.iteritems(), key=itemgetter(1)):
+                            ret = self._pack(k, nest_limit-1)
+                            if ret != 0: break
+                            ret = self._pack(v, nest_limit-1)
+                            if ret != 0: break
+                    else:
+                        for k, v in d.iteritems():
+                            ret = self._pack(k, nest_limit-1)
+                            if ret != 0: break
+                            ret = self._pack(v, nest_limit-1)
+                            if ret != 0: break
             elif not strict_types and PyDict_Check(o):
                 L = len(o)
                 if L > ITEM_LIMIT:
                     raise PackValueError("dict is too large")
                 ret = msgpack_pack_map(&self.pk, L)
                 if ret == 0:
-                    for k, v in o.items():
-                        ret = self._pack(k, nest_limit-1)
-                        if ret != 0: break
-                        ret = self._pack(v, nest_limit-1)
-                        if ret != 0: break
+                    if self.sort_keys:
+                        for k, v in sorted(o.items()):
+                            ret = self._pack(k, nest_limit-1)
+                            if ret != 0: break
+                            ret = self._pack(v, nest_limit-1)
+                            if ret != 0: break
+                    else:
+                        for k, v in o.items():
+                            ret = self._pack(k, nest_limit-1)
+                            if ret != 0: break
+                            ret = self._pack(v, nest_limit-1)
+                            if ret != 0: break
             elif type(o) is ExtType if strict_types else isinstance(o, ExtType):
                 # This should be before Tuple because ExtType is namedtuple.
                 longval = o.code
@@ -334,11 +355,18 @@ cdef class Packer(object):
         """
         cdef int ret = msgpack_pack_map(&self.pk, len(pairs))
         if ret == 0:
-            for k, v in pairs:
-                ret = self._pack(k)
-                if ret != 0: break
-                ret = self._pack(v)
-                if ret != 0: break
+            if self.sort_keys:
+                for k, v in sorted(pairs, key=itemgetter(0)):
+                    ret = self._pack(k)
+                    if ret != 0: break
+                    ret = self._pack(v)
+                    if ret != 0: break
+            else:
+                for k, v in pairs:
+                    ret = self._pack(k)
+                    if ret != 0: break
+                    ret = self._pack(v)
+                    if ret != 0: break
         if ret == -1:
             raise MemoryError
         elif ret:  # should not happen

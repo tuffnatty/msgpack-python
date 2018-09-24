@@ -1,5 +1,6 @@
 """Fallback pure Python implementation of msgpack"""
 
+from operator import itemgetter
 import sys
 import struct
 import warnings
@@ -720,10 +721,13 @@ class Packer(object):
 
     :param str unicode_errors:
         Error handler for encoding unicode. (default: 'strict')
+
+    :param bool sort_keys:
+        Iterate dictionaries in lexicographical order. (default: False)
     """
     def __init__(self, default=None, encoding=None, unicode_errors=None,
                  use_single_float=False, autoreset=True, use_bin_type=False,
-                 strict_types=False):
+                 strict_types=False, sort_keys=False):
         if encoding is None:
             encoding = 'utf_8'
         else:
@@ -740,6 +744,7 @@ class Packer(object):
         self._use_bin_type = use_bin_type
         self._encoding = encoding
         self._unicode_errors = unicode_errors
+        self._sort_keys = sort_keys
         self._buffer = StringIO()
         if default is not None:
             if not callable(default):
@@ -949,7 +954,8 @@ class Packer(object):
 
     def _pack_map_pairs(self, n, pairs, nest_limit=DEFAULT_RECURSE_LIMIT):
         self._pack_map_header(n)
-        for (k, v) in pairs:
+        for (k, v) in (sorted(pairs, key=itemgetter(0)) if self._sort_keys
+                       else pairs):
             self._pack(k, nest_limit - 1)
             self._pack(v, nest_limit - 1)
 
